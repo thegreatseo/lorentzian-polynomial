@@ -1,6 +1,6 @@
 /-
 Copyright (c) 2026 Jaehyeon Seo. All rights reserved.
-Released under ...
+Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Jaehyeon Seo
 -/
 module
