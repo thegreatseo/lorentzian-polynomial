@@ -11,7 +11,12 @@ public import Mathlib.Algebra.MvPolynomial.Monad
 /-!
 # Closure properties of Lorentzian polynomials
 
-This file states closure properties of Lorentzian polynomials.
+This file proves that Lorentzian polynomials are preserved by elementary splitting: replacing one
+variable by the sum of that variable and a fresh variable.
+
+## Main result
+
+* `MvPolynomial.IsLorentzian.elementary_splitting`
 -/
 
 @[expose] public section
@@ -20,7 +25,65 @@ noncomputable section
 
 namespace MvPolynomial
 
-variable {σ : Type*} [DecidableEq σ]
+variable {σ : Type*}
+
+private def collapseIndex (i : σ) : Option σ → σ
+  | none => i
+  | some j => j
+
+/-! ### Coefficientwise nonnegativity -/
+
+private lemma CoeffNonneg.C {r : ℝ} (hr : 0 ≤ r) :
+    CoeffNonneg (C r : MvPolynomial σ ℝ) := by
+  classical
+  intro m
+  rw [coeff_C]
+  split_ifs <;> positivity
+
+private lemma CoeffNonneg.add {p q : MvPolynomial σ ℝ}
+    (hp : CoeffNonneg p) (hq : CoeffNonneg q) : CoeffNonneg (p + q) := by
+  intro m
+  rw [coeff_add]
+  exact add_nonneg (hp m) (hq m)
+
+private lemma CoeffNonneg.mul {p q : MvPolynomial σ ℝ}
+    (hp : CoeffNonneg p) (hq : CoeffNonneg q) : CoeffNonneg (p * q) := by
+  classical
+  intro m
+  rw [coeff_mul]
+  exact Finset.sum_nonneg fun x _ ↦ mul_nonneg (hp x.1) (hq x.2)
+
+private lemma CoeffNonneg.pow {p : MvPolynomial σ ℝ} (hp : CoeffNonneg p) (n : ℕ) :
+    CoeffNonneg (p ^ n) := by
+  induction n with
+  | zero => simpa using CoeffNonneg.C (σ := σ) zero_le_one
+  | succ n hn => simpa [pow_succ] using hn.mul hp
+
+private lemma CoeffNonneg.sum {ι : Type*} (s : Finset ι) (p : ι → MvPolynomial σ ℝ)
+    (hp : ∀ i ∈ s, CoeffNonneg (p i)) : CoeffNonneg (∑ i ∈ s, p i) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simpa using CoeffNonneg.C (σ := σ) le_rfl
+  | @insert i s hi ih =>
+      rw [Finset.sum_insert hi]
+      exact (hp i (Finset.mem_insert_self i s)).add
+        (ih fun j hj ↦ hp j (Finset.mem_insert_of_mem hj))
+
+private lemma CoeffNonneg.prod {ι : Type*} (s : Finset ι) (p : ι → MvPolynomial σ ℝ)
+    (hp : ∀ i ∈ s, CoeffNonneg (p i)) : CoeffNonneg (∏ i ∈ s, p i) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simpa using CoeffNonneg.C (σ := σ) zero_le_one
+  | @insert i s hi ih =>
+      rw [Finset.prod_insert hi]
+      exact (hp i (Finset.mem_insert_self i s)).mul
+        (ih fun j hj ↦ hp j (Finset.mem_insert_of_mem hj))
+
+/-! ### Basic properties of elementary splitting -/
+
+section BasicProperties
+
+variable [DecidableEq σ]
 
 private def splitVariable (i j : σ) : MvPolynomial (Option σ) ℝ :=
   X (some j) + if j = i then X none else 0
@@ -33,65 +96,6 @@ private def elementarySplitting (i : σ) :
     elementarySplitting i (X j) = splitVariable i j := by
   simp [elementarySplitting]
 
-omit [DecidableEq σ] in
-private lemma CoeffNonneg.C {r : ℝ} (hr : 0 ≤ r) :
-    CoeffNonneg (C r : MvPolynomial σ ℝ) := by
-  classical
-  intro m
-  rw [coeff_C]
-  split_ifs <;> positivity
-
-omit [DecidableEq σ] in
-private lemma CoeffNonneg.X (i : σ) : CoeffNonneg (X i : MvPolynomial σ ℝ) := by
-  classical
-  intro m
-  rw [coeff_X]
-  split_ifs <;> positivity
-
-omit [DecidableEq σ] in
-private lemma CoeffNonneg.add {p q : MvPolynomial σ ℝ}
-    (hp : CoeffNonneg p) (hq : CoeffNonneg q) : CoeffNonneg (p + q) := by
-  intro m
-  rw [coeff_add]
-  exact add_nonneg (hp m) (hq m)
-
-omit [DecidableEq σ] in
-private lemma CoeffNonneg.mul {p q : MvPolynomial σ ℝ}
-    (hp : CoeffNonneg p) (hq : CoeffNonneg q) : CoeffNonneg (p * q) := by
-  classical
-  intro m
-  rw [coeff_mul]
-  exact Finset.sum_nonneg fun x _ ↦ mul_nonneg (hp x.1) (hq x.2)
-
-omit [DecidableEq σ] in
-private lemma CoeffNonneg.pow {p : MvPolynomial σ ℝ} (hp : CoeffNonneg p) (n : ℕ) :
-    CoeffNonneg (p ^ n) := by
-  induction n with
-  | zero => simpa using CoeffNonneg.C (σ := σ) zero_le_one
-  | succ n hn => simpa [pow_succ] using hn.mul hp
-
-omit [DecidableEq σ] in
-private lemma CoeffNonneg.sum {ι : Type*} (s : Finset ι) (p : ι → MvPolynomial σ ℝ)
-    (hp : ∀ i ∈ s, CoeffNonneg (p i)) : CoeffNonneg (∑ i ∈ s, p i) := by
-  classical
-  induction s using Finset.induction_on with
-  | empty => simpa using CoeffNonneg.C (σ := σ) le_rfl
-  | @insert i s hi ih =>
-      rw [Finset.sum_insert hi]
-      exact (hp i (Finset.mem_insert_self i s)).add
-        (ih fun j hj ↦ hp j (Finset.mem_insert_of_mem hj))
-
-omit [DecidableEq σ] in
-private lemma CoeffNonneg.prod {ι : Type*} (s : Finset ι) (p : ι → MvPolynomial σ ℝ)
-    (hp : ∀ i ∈ s, CoeffNonneg (p i)) : CoeffNonneg (∏ i ∈ s, p i) := by
-  classical
-  induction s using Finset.induction_on with
-  | empty => simpa using CoeffNonneg.C (σ := σ) zero_le_one
-  | @insert i s hi ih =>
-      rw [Finset.prod_insert hi]
-      exact (hp i (Finset.mem_insert_self i s)).mul
-        (ih fun j hj ↦ hp j (Finset.mem_insert_of_mem hj))
-
 private lemma CoeffNonneg.elementarySplitting {f : MvPolynomial σ ℝ}
     (hf : CoeffNonneg f) (i : σ) : CoeffNonneg (elementarySplitting i f) := by
   rw [f.as_sum, map_sum]
@@ -100,12 +104,11 @@ private lemma CoeffNonneg.elementarySplitting {f : MvPolynomial σ ℝ}
   rw [MvPolynomial.elementarySplitting, bind₁_monomial]
   apply CoeffNonneg.mul (CoeffNonneg.C (hf m))
   apply CoeffNonneg.prod
-  intro j hj
+  intro j _
   apply CoeffNonneg.pow
-  apply CoeffNonneg.add (CoeffNonneg.X (some j))
-  split_ifs
-  · exact CoeffNonneg.X none
-  · simpa using CoeffNonneg.C (σ := Option σ) le_rfl
+  intro m
+  rw [splitVariable, coeff_add]
+  split_ifs <;> simp only [coeff_X, coeff_zero, add_zero] <;> positivity
 
 private lemma IsHomogeneous.elementarySplitting {f : MvPolynomial σ ℝ} {d : ℕ}
     (hf : f.IsHomogeneous d) (i : σ) : (elementarySplitting i f).IsHomogeneous d := by
@@ -121,95 +124,85 @@ private lemma IsHomogeneous.elementarySplitting {f : MvPolynomial σ ℝ} {d : �
   convert h using 1
   omega
 
-private lemma pderiv_splitVariable_some (i j k : σ) :
-    pderiv (some j) (splitVariable i k) = if k = j then 1 else 0 := by
-  by_cases hki : k = i
-  · subst k
-    by_cases hij : i = j
-    · subst j; simp [splitVariable]
-    · simp [splitVariable, hij]
-  · by_cases hkj : k = j
-    · subst k; simp [splitVariable, hki]
-    · simp [splitVariable, hki, hkj]
+private lemma pderiv_splitVariable (i : σ) (k : Option σ) (j : σ) :
+    pderiv k (splitVariable i j) = if collapseIndex i k = j then 1 else 0 := by
+  cases k with
+  | none =>
+      by_cases hji : j = i
+      · subst j
+        simp [splitVariable, collapseIndex]
+      · simp [splitVariable, collapseIndex, hji, Ne.symm hji]
+  | some k =>
+      by_cases hji : j = i
+      · subst j
+        by_cases hik : i = k
+        · subst k
+          simp [splitVariable, collapseIndex]
+        · simp [splitVariable, collapseIndex, hik, Ne.symm hik]
+      · by_cases hjk : j = k
+        · subst k
+          simp [splitVariable, collapseIndex, hji]
+        · simp [splitVariable, collapseIndex, hji, hjk, Ne.symm hjk]
 
-private lemma pderiv_splitVariable_none (i j : σ) :
-    pderiv none (splitVariable i j) = if j = i then 1 else 0 := by
-  by_cases hji : j = i <;> simp [splitVariable, hji]
-
-private lemma pderiv_elementarySplitting_some (f : MvPolynomial σ ℝ) (i j : σ) :
-    pderiv (some j) (elementarySplitting i f) = elementarySplitting i (pderiv j f) := by
-  induction f using MvPolynomial.induction_on with
-  | C r => simp [elementarySplitting]
-  | add p q hp hq => simp [hp, hq]
-  | mul_X p k hp =>
-      simp only [map_mul, elementarySplitting_X, pderiv_mul, hp,
-        pderiv_splitVariable_some, map_add]
-      by_cases hkj : k = j
-      · subst k; simp
-      · simp [hkj]
-
-private lemma pderiv_elementarySplitting_none (f : MvPolynomial σ ℝ) (i : σ) :
-    pderiv none (elementarySplitting i f) = elementarySplitting i (pderiv i f) := by
+private lemma pderiv_elementarySplitting (f : MvPolynomial σ ℝ) (i : σ) (k : Option σ) :
+    pderiv k (elementarySplitting i f) =
+      elementarySplitting i (pderiv (collapseIndex i k) f) := by
   induction f using MvPolynomial.induction_on with
   | C r => simp [elementarySplitting]
   | add p q hp hq => simp [hp, hq]
   | mul_X p j hp =>
       simp only [map_mul, elementarySplitting_X, pderiv_mul, hp,
-        pderiv_splitVariable_none, map_add]
-      by_cases hji : j = i
+        pderiv_splitVariable, map_add]
+      by_cases hkj : collapseIndex i k = j
       · subst j; simp
-      · simp [hji]
+      · simp [hkj]
 
-private def splitCollapse (i : σ) (m : Option σ →₀ ℕ) : σ →₀ ℕ :=
+end BasicProperties
+
+/-! ### M-convex support -/
+
+private def collapseExponent (i : σ) (m : Option σ →₀ ℕ) : σ →₀ ℕ :=
   m.some + Finsupp.single i (m none)
 
-private def collapseIndex (i : σ) : Option σ → σ
-  | none => i
-  | some j => j
-
-omit [DecidableEq σ] in
-@[simp] private lemma splitCollapse_add (i : σ) (x y : Option σ →₀ ℕ) :
-    splitCollapse i (x + y) = splitCollapse i x + splitCollapse i y := by
+@[simp] private lemma collapseExponent_add (i : σ) (x y : Option σ →₀ ℕ) :
+    collapseExponent i (x + y) = collapseExponent i x + collapseExponent i y := by
   classical
   ext j
   by_cases hji : j = i
   · subst j
-    simp [splitCollapse]
+    simp [collapseExponent]
     omega
-  · simp [splitCollapse, hji]
+  · simp [collapseExponent, hji]
 
-omit [DecidableEq σ] in
-@[simp] private lemma splitCollapse_single (i : σ) (k : Option σ) (n : ℕ) :
-    splitCollapse i (Finsupp.single k n) = Finsupp.single (collapseIndex i k) n := by
+@[simp] private lemma collapseExponent_single (i : σ) (k : Option σ) (n : ℕ) :
+    collapseExponent i (Finsupp.single k n) = Finsupp.single (collapseIndex i k) n := by
   classical
   ext j
   cases k with
-  | none => simp [splitCollapse, collapseIndex, Finsupp.single_apply]
+  | none => simp [collapseExponent, collapseIndex, Finsupp.single_apply]
   | some a =>
       by_cases hai : a = i
-      · subst a; simp [splitCollapse, collapseIndex]
-      · simp [splitCollapse, collapseIndex, Finsupp.single_apply]
+      · subst a; simp [collapseExponent, collapseIndex]
+      · simp [collapseExponent, collapseIndex, Finsupp.single_apply]
 
-omit [DecidableEq σ] in
-private lemma splitCollapse_exchange (i : σ) (x : Option σ →₀ ℕ) (k l : Option σ)
+private lemma collapseExponent_exchange (i : σ) (x : Option σ →₀ ℕ) (k l : Option σ)
     (hk : x k ≠ 0) :
-    splitCollapse i (x - Finsupp.single k 1 + Finsupp.single l 1) =
-      splitCollapse i x - Finsupp.single (collapseIndex i k) 1 +
+    collapseExponent i (x - Finsupp.single k 1 + Finsupp.single l 1) =
+      collapseExponent i x - Finsupp.single (collapseIndex i k) 1 +
         Finsupp.single (collapseIndex i l) 1 := by
   classical
-  have hx := congrArg (splitCollapse i) (Finsupp.sub_add_single_one_cancel hk)
-  rw [splitCollapse_add, splitCollapse_single] at hx
-  have hsub : splitCollapse i (x - Finsupp.single k 1) =
-      splitCollapse i x - Finsupp.single (collapseIndex i k) 1 := by
+  have hx := congrArg (collapseExponent i) (Finsupp.sub_add_single_one_cancel hk)
+  rw [collapseExponent_add, collapseExponent_single] at hx
+  have hsub : collapseExponent i (x - Finsupp.single k 1) =
+      collapseExponent i x - Finsupp.single (collapseIndex i k) 1 := by
     ext j
     have hxj := congrArg (fun z : σ →₀ ℕ ↦ z j) hx
     simp only [Finsupp.add_apply, Finsupp.tsub_apply] at hxj ⊢
     omega
-  rw [splitCollapse_add, hsub, splitCollapse_single]
+  rw [collapseExponent_add, hsub, collapseExponent_single]
 
-omit [DecidableEq σ] in
-private lemma exists_lt_of_splitCollapse_lt (i : σ) (x y : Option σ →₀ ℕ) (j : σ)
-    (h : splitCollapse i x j < splitCollapse i y j) :
+private lemma exists_lt_of_collapseExponent_lt (i : σ) (x y : Option σ →₀ ℕ) (j : σ)
+    (h : collapseExponent i x j < collapseExponent i y j) :
     ∃ k, collapseIndex i k = j ∧ x k < y k := by
   classical
   by_cases hji : j = i
@@ -217,46 +210,58 @@ private lemma exists_lt_of_splitCollapse_lt (i : σ) (x y : Option σ →₀ ℕ
     by_cases hnone : x none < y none
     · exact ⟨none, rfl, hnone⟩
     · refine ⟨some i, rfl, ?_⟩
-      simp [splitCollapse] at h
+      simp [collapseExponent] at h
       omega
   · refine ⟨some j, rfl, ?_⟩
-    simpa [splitCollapse, hji] using h
+    simpa [collapseExponent, hji] using h
 
-omit [DecidableEq σ] in
-private lemma exists_same_collapseIndex_lt (i : σ) (x y : Option σ →₀ ℕ)
+private lemma exists_lt_same_collapseIndex (i : σ) (x y : Option σ →₀ ℕ)
     (k : Option σ) (hk : y k < x k)
-    (h : ¬splitCollapse i y (collapseIndex i k) < splitCollapse i x (collapseIndex i k)) :
+    (h : ¬collapseExponent i y (collapseIndex i k) <
+      collapseExponent i x (collapseIndex i k)) :
     ∃ l, collapseIndex i l = collapseIndex i k ∧ x l < y l := by
   classical
   cases k with
   | none =>
       refine ⟨some i, rfl, ?_⟩
-      simp [splitCollapse, collapseIndex] at h
+      simp [collapseExponent, collapseIndex] at h
       omega
   | some j =>
       by_cases hji : j = i
       · subst j
         refine ⟨none, rfl, ?_⟩
-        simp [splitCollapse, collapseIndex] at h
+        simp [collapseExponent, collapseIndex] at h
         omega
       · exfalso
         apply h
-        simpa [splitCollapse, collapseIndex, hji] using hk
+        simpa [collapseExponent, collapseIndex, hji] using hk
 
-omit [DecidableEq σ] in
-private lemma splitCollapse_collapseIndex_ne_zero (i : σ) (x : Option σ →₀ ℕ)
-    (k : Option σ) (hk : x k ≠ 0) : splitCollapse i x (collapseIndex i k) ≠ 0 := by
+private lemma collapseExponent_apply_ne_zero (i : σ) (x : Option σ →₀ ℕ)
+    (k : Option σ) (hk : x k ≠ 0) : collapseExponent i x (collapseIndex i k) ≠ 0 := by
   classical
   cases k with
   | none =>
-      simp [splitCollapse, collapseIndex] at hk ⊢
+      simp [collapseExponent, collapseIndex] at hk ⊢
       omega
   | some j =>
       by_cases hji : j = i
       · subst j
-        simp [splitCollapse, collapseIndex] at hk ⊢
+        simp [collapseExponent, collapseIndex] at hk ⊢
         omega
-      · simpa [splitCollapse, collapseIndex, hji] using hk
+      · simpa [collapseExponent, collapseIndex, hji] using hk
+
+private lemma mem_support_pderiv_iff' (p : MvPolynomial σ ℝ) (i : σ) (m : σ →₀ ℕ) :
+    m ∈ (pderiv i p).support ↔ m + Finsupp.single i 1 ∈ p.support := by
+  rw [mem_support_iff, mem_support_iff, coeff_pderiv]
+  constructor
+  · intro h hc
+    exact h (by simp [hc])
+  · intro h
+    exact mul_ne_zero h (by positivity)
+
+section Support
+
+variable [DecidableEq σ]
 
 private lemma eval_zero_optionEquivLeft_elementarySplitting (f : MvPolynomial σ ℝ) (i : σ) :
     Polynomial.eval 0 (optionEquivLeft ℝ σ (elementarySplitting i f)) = f := by
@@ -267,108 +272,107 @@ private lemma eval_zero_optionEquivLeft_elementarySplitting (f : MvPolynomial σ
       rw [map_mul, elementarySplitting_X, map_mul, Polynomial.eval_mul, hp]
       by_cases hji : j = i <;> simp [splitVariable, hji]
 
-omit [DecidableEq σ] in
-private lemma mem_support_pderiv_iff' (p : MvPolynomial σ ℝ) (i : σ) (m : σ →₀ ℕ) :
-    m ∈ (pderiv i p).support ↔ m + Finsupp.single i 1 ∈ p.support := by
-  rw [mem_support_iff, mem_support_iff, coeff_pderiv]
-  constructor
-  · intro h hc
-    exact h (by simp [hc])
-  · intro h
-    exact mul_ne_zero h (by positivity)
-
 private lemma mem_support_elementarySplitting_iff (f : MvPolynomial σ ℝ) (i : σ)
     (m : Option σ →₀ ℕ) :
-    m ∈ (elementarySplitting i f).support ↔ splitCollapse i m ∈ f.support := by
+    m ∈ (elementarySplitting i f).support ↔ collapseExponent i m ∈ f.support := by
   induction hmn : m none generalizing f m with
   | zero =>
       rw [mem_support_iff, mem_support_iff,
         ← optionEquivLeft_coeff_some_coeff_none ℝ σ m (elementarySplitting i f), hmn,
         Polynomial.coeff_zero_eq_eval_zero, eval_zero_optionEquivLeft_elementarySplitting]
-      simp [splitCollapse, hmn]
+      simp [collapseExponent, hmn]
   | succ n ih =>
       let m' := m - Finsupp.single none 1
       have hmnone : m none ≠ 0 := by omega
       have hm'none : m' none = n := by simp [m', hmn]
       have hmadd : m' + Finsupp.single none 1 = m :=
         Finsupp.sub_add_single_one_cancel hmnone
-      have hcollapse : splitCollapse i m' + Finsupp.single i 1 = splitCollapse i m := by
+      have hcollapse : collapseExponent i m' + Finsupp.single i 1 =
+          collapseExponent i m := by
         ext j
         by_cases hji : j = i
         · subst j
-          simp [splitCollapse, m', hmn]
+          simp [collapseExponent, m', hmn]
           omega
-        · simp [splitCollapse, m', hji]
+        · simp [collapseExponent, m', hji]
       conv_lhs => rw [← hmadd]
-      rw [← mem_support_pderiv_iff', pderiv_elementarySplitting_none,
+      rw [← mem_support_pderiv_iff', pderiv_elementarySplitting,
+        show collapseIndex i none = i by rfl,
         ih (pderiv i f) m' hm'none, mem_support_pderiv_iff', hcollapse]
 
 private lemma Set.MConvex.elementarySplitting_support {f : MvPolynomial σ ℝ}
     (hf : Set.MConvex (f.support : Set (σ →₀ ℕ))) (i : σ) :
     Set.MConvex ((elementarySplitting i f).support : Set (Option σ →₀ ℕ)) := by
   intro x hx y hy k hk
-  have hx' : splitCollapse i x ∈ f.support :=
+  have hxCollapse : collapseExponent i x ∈ f.support :=
     (mem_support_elementarySplitting_iff f i x).mp hx
-  have hy' : splitCollapse i y ∈ f.support :=
+  have hyCollapse : collapseExponent i y ∈ f.support :=
     (mem_support_elementarySplitting_iff f i y).mp hy
-  by_cases hcollapse :
-      splitCollapse i y (collapseIndex i k) < splitCollapse i x (collapseIndex i k)
-  · obtain ⟨b, hb, hxb, hyb⟩ := hf hx' hy' (collapseIndex i k) hcollapse
-    obtain ⟨l, hbl, hl⟩ := exists_lt_of_splitCollapse_lt i x y b hb
+  by_cases hkCollapse :
+      collapseExponent i y (collapseIndex i k) < collapseExponent i x (collapseIndex i k)
+  · obtain ⟨j, hj, hxj, hyj⟩ := hf hxCollapse hyCollapse (collapseIndex i k) hkCollapse
+    obtain ⟨l, hlj, hl⟩ := exists_lt_of_collapseExponent_lt i x y j hj
     have hxk : x k ≠ 0 := by omega
     have hyl : y l ≠ 0 := by omega
     refine ⟨l, hl, (mem_support_elementarySplitting_iff f i _).mpr ?_,
       (mem_support_elementarySplitting_iff f i _).mpr ?_⟩
-    · rw [splitCollapse_exchange i x k l hxk, hbl]
-      exact hxb
-    · rw [splitCollapse_exchange i y l k hyl, hbl]
-      exact hyb
-  · obtain ⟨l, hlbase, hl⟩ :=
-      exists_same_collapseIndex_lt i x y k hk hcollapse
+    · rw [collapseExponent_exchange i x k l hxk, hlj]
+      exact hxj
+    · rw [collapseExponent_exchange i y l k hyl, hlj]
+      exact hyj
+  · obtain ⟨l, hlCollapse, hl⟩ :=
+      exists_lt_same_collapseIndex i x y k hk hkCollapse
     have hxk : x k ≠ 0 := by omega
     have hyl : y l ≠ 0 := by omega
-    have hybase : splitCollapse i y (collapseIndex i k) ≠ 0 := by
-      rw [← hlbase]
-      exact splitCollapse_collapseIndex_ne_zero i y l hyl
+    have hyCollapseNe : collapseExponent i y (collapseIndex i k) ≠ 0 := by
+      rw [← hlCollapse]
+      exact collapseExponent_apply_ne_zero i y l hyl
     refine ⟨l, hl, (mem_support_elementarySplitting_iff f i _).mpr ?_,
       (mem_support_elementarySplitting_iff f i _).mpr ?_⟩
-    · rw [splitCollapse_exchange i x k l hxk, hlbase,
+    · rw [collapseExponent_exchange i x k l hxk, hlCollapse,
         Finsupp.sub_add_single_one_cancel
-          (splitCollapse_collapseIndex_ne_zero i x k hxk)]
-      exact hx'
-    · rw [splitCollapse_exchange i y l k hyl, hlbase,
+          (collapseExponent_apply_ne_zero i x k hxk)]
+      exact hxCollapse
+    · rw [collapseExponent_exchange i y l k hyl, hlCollapse,
         Finsupp.sub_add_single_one_cancel
-          hybase]
-      exact hy'
+          hyCollapseNe]
+      exact hyCollapse
 
-omit [DecidableEq σ] in
+end Support
+
+/-! ### Hessian signature -/
+
 private lemma sigPos_comp_le [Finite σ] (Q : QuadraticForm ℝ (σ → ℝ))
     (L : (Option σ → ℝ) →ₗ[ℝ] (σ → ℝ)) :
     sigPos (Q.comp L) ≤ sigPos Q := by
   letI := Fintype.ofFinite σ
   obtain ⟨V, hVrank, hVpos⟩ :=
     exists_finrank_eq_sigPos_and_posDef (Q.comp L)
-  let LV : V →ₗ[ℝ] (σ → ℝ) := L.comp V.subtype
-  have hLVinj : Function.Injective LV := by
+  let LOnV : V →ₗ[ℝ] (σ → ℝ) := L.comp V.subtype
+  have hLOnVInjective : Function.Injective LOnV := by
     intro x y hxy
     apply sub_eq_zero.mp
     by_contra hne
     have hpos := hVpos (x - y) hne
     change L (x : Option σ → ℝ) = L (y : Option σ → ℝ) at hxy
     simp [hxy] at hpos
-  have hRangePos : (Q.restrict (LinearMap.range LV)).PosDef := by
+  have hRangePos : (Q.restrict (LinearMap.range LOnV)).PosDef := by
     rintro ⟨_, ⟨v, rfl⟩⟩ hv
     have hv0 : v ≠ 0 := by
       intro hv0
       apply hv
       subst v
       simp
-    simpa [LV] using hVpos v hv0
+    simpa [LOnV] using hVpos v hv0
   calc
     sigPos (Q.comp L) = Module.finrank ℝ V := hVrank.symm
-    _ = Module.finrank ℝ (LinearMap.range LV) :=
-      (LinearMap.finrank_range_of_inj hLVinj).symm
+    _ = Module.finrank ℝ (LinearMap.range LOnV) :=
+      (LinearMap.finrank_range_of_inj hLOnVInjective).symm
     _ ≤ sigPos Q := le_sigPos_of_posDef Q hRangePos
+
+section HessianSignature
+
+variable [DecidableEq σ]
 
 private def splitLinearMap (i : σ) : (Option σ → ℝ) →ₗ[ℝ] (σ → ℝ) where
   toFun x j := x (some j) + if j = i then x none else 0
@@ -391,13 +395,8 @@ private lemma sum_collapseIndex [Fintype σ] (i : σ) (x : Option σ → ℝ) (F
   simp only [splitLinearMap, LinearMap.coe_mk, AddHom.coe_mk, Finset.sum_add_distrib,
     add_mul, collapseIndex]
   simp_rw [ite_mul, zero_mul]
-  have hi : (∑ j : σ, if j = i then x none * F j else 0) = x none * F i := by
-    rw [Finset.sum_eq_single i]
-    · simp
-    · intro j _ hji
-      simp [hji]
-    · simp
-  rw [hi]
+  rw [Finset.sum_ite_eq']
+  simp only [Finset.mem_univ, if_true]
   ring
 
 private lemma constantCoeff_elementarySplitting (f : MvPolynomial σ ℝ) (i : σ) :
@@ -412,23 +411,7 @@ private lemma hessianAtZero_elementarySplitting_apply (f : MvPolynomial σ ℝ) 
     (k l : Option σ) :
     hessianAtZero (elementarySplitting i f) k l =
       hessianAtZero f (collapseIndex i k) (collapseIndex i l) := by
-  cases k with
-  | none =>
-      cases l with
-      | none =>
-          simp [hessianAtZero, pderiv_elementarySplitting_none,
-            constantCoeff_elementarySplitting, collapseIndex]
-      | some l =>
-          simp [hessianAtZero, pderiv_elementarySplitting_none,
-            pderiv_elementarySplitting_some, constantCoeff_elementarySplitting, collapseIndex]
-  | some k =>
-      cases l with
-      | none =>
-          simp [hessianAtZero, pderiv_elementarySplitting_none,
-            pderiv_elementarySplitting_some, constantCoeff_elementarySplitting, collapseIndex]
-      | some l =>
-          simp [hessianAtZero, pderiv_elementarySplitting_some,
-            constantCoeff_elementarySplitting, collapseIndex]
+  simp [hessianAtZero, pderiv_elementarySplitting, constantCoeff_elementarySplitting]
 
 private lemma hessianAtZero_toQuadraticForm_elementarySplitting
     [Fintype σ] (f : MvPolynomial σ ℝ) (i : σ) :
@@ -441,23 +424,23 @@ private lemma hessianAtZero_toQuadraticForm_elementarySplitting
   calc
     (∑ k, ∑ l, x k * (x l * hessianAtZero f (collapseIndex i k) (collapseIndex i l))) =
         ∑ k, x k * ∑ l, x l * hessianAtZero f (collapseIndex i k) (collapseIndex i l) := by
-          apply Finset.sum_congr rfl
-          intro k _
-          rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro k _
+      rw [Finset.mul_sum]
     _ = ∑ k, x k * ∑ l, splitLinearMap i x l *
         hessianAtZero f (collapseIndex i k) l := by
-          apply Finset.sum_congr rfl
-          intro k _
-          rw [sum_collapseIndex]
+      apply Finset.sum_congr rfl
+      intro k _
+      rw [sum_collapseIndex]
     _ = ∑ k, splitLinearMap i x k * ∑ l, splitLinearMap i x l *
         hessianAtZero f k l := by
-          exact sum_collapseIndex i x
-            (fun k ↦ ∑ l, splitLinearMap i x l * hessianAtZero f k l)
+      exact sum_collapseIndex i x
+        (fun k ↦ ∑ l, splitLinearMap i x l * hessianAtZero f k l)
     _ = ∑ k, ∑ l, splitLinearMap i x k *
         (splitLinearMap i x l * hessianAtZero f k l) := by
-          apply Finset.sum_congr rfl
-          intro k _
-          rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro k _
+      rw [Finset.mul_sum]
 
 private lemma HasAtMostOnePositiveEigenvalue.elementarySplitting
     [Fintype σ] (f : MvPolynomial σ ℝ) (i : σ)
@@ -466,6 +449,8 @@ private lemma HasAtMostOnePositiveEigenvalue.elementarySplitting
   unfold HasAtMostOnePositiveEigenvalue at hf ⊢
   rw [hessianAtZero_toQuadraticForm_elementarySplitting]
   exact (sigPos_comp_le (hessianAtZero f).toQuadraticForm' (splitLinearMap i)).trans hf
+
+/-! ### Main theorem -/
 
 /-- Replacing one variable of a Lorentzian polynomial by the sum of that variable and a fresh
 variable preserves the Lorentzian property. The fresh variable is indexed by `none : Option σ`.
@@ -478,24 +463,22 @@ theorem IsLorentzian.elementary_splitting [Fintype σ] {f : MvPolynomial σ ℝ}
   induction d using Nat.strong_induction_on generalizing f with
   | h d ih =>
       match d with
-      | 0 =>
-          exact ⟨hf.1.elementarySplitting i, hf.2.elementarySplitting i⟩
-      | 1 =>
-          exact ⟨hf.1.elementarySplitting i, hf.2.elementarySplitting i⟩
+      | 0 | 1 =>
+          obtain ⟨hhom, hcoeff⟩ := hf
+          exact ⟨hhom.elementarySplitting i, hcoeff.elementarySplitting i⟩
       | 2 =>
-          exact ⟨hf.1.elementarySplitting i, hf.2.1.elementarySplitting i,
-            Set.MConvex.elementarySplitting_support hf.2.2.1 i,
-            HasAtMostOnePositiveEigenvalue.elementarySplitting f i hf.2.2.2⟩
+          obtain ⟨hhom, hcoeff, hconvex, hsignature⟩ := hf
+          exact ⟨hhom.elementarySplitting i, hcoeff.elementarySplitting i,
+            Set.MConvex.elementarySplitting_support hconvex i,
+            HasAtMostOnePositiveEigenvalue.elementarySplitting f i hsignature⟩
       | n + 3 =>
-          refine ⟨hf.1.elementarySplitting i, hf.2.1.elementarySplitting i,
-            Set.MConvex.elementarySplitting_support hf.2.2.1 i, ?_⟩
+          obtain ⟨hhom, hcoeff, hconvex, hderiv⟩ := hf
+          refine ⟨hhom.elementarySplitting i, hcoeff.elementarySplitting i,
+            Set.MConvex.elementarySplitting_support hconvex i, ?_⟩
           intro k
-          cases k with
-          | none =>
-              rw [pderiv_elementarySplitting_none]
-              exact ih (n + 2) (by omega) (hf.2.2.2 i)
-          | some j =>
-              rw [pderiv_elementarySplitting_some]
-              exact ih (n + 2) (by omega) (hf.2.2.2 j)
+          rw [pderiv_elementarySplitting]
+          exact ih (n + 2) (by omega) (hderiv (collapseIndex i k))
+
+end HessianSignature
 
 end MvPolynomial
