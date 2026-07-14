@@ -5,4 +5,4 @@ Authors: Jaehyeon Seo
 -/
 module
 
-public import LorentzianPolynomial.Basic
+public import LorentzianPolynomial.ClosureProperty
